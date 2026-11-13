@@ -2,16 +2,9 @@ name: build
 
 on:
   workflow_dispatch:
-    inputs:
-      release:
-        description: publish release
-        type: boolean
-        default: true
   schedule:
     # monthly: pick up the latest 9.0.x patch
     - cron: '0 4 1 * *'
-  push:
-    branches: [main]
 
 permissions:
   contents: read
@@ -42,7 +35,6 @@ jobs:
           retention-days: 14
 
   release:
-    if: github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && github.event.inputs.release == 'true')
     needs: build
     runs-on: ubuntu-24.04
     permissions:
