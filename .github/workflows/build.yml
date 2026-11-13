@@ -1,0 +1,59 @@
+name: build
+
+on:
+  workflow_dispatch:
+    inputs:
+      release:
+        description: publish release
+        type: boolean
+        default: false
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    outputs:
+      ffmpeg: ${{ steps.meta.outputs.ffmpeg }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: deps
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends gpg zip unzip xz-utils
+      - name: build
+        run: ./scripts/build.sh
+      - name: meta
+        id: meta
+        run: |
+          . dist/versions.env
+          echo "ffmpeg=$FFMPEG_VERSION" >> "$GITHUB_OUTPUT"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: ffmpeg-armv7
+          path: dist/*.zip
+          if-no-files-found: error
+          retention-days: 14
+
+  release:
+    if: github.event_name == 'workflow_dispatch' && github.event.inputs.release == 'true'
+    needs: build
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: ffmpeg-armv7
+          path: dist
+      - name: publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          tag="ffmpeg-${{ needs.build.outputs.ffmpeg }}"
+          gh release view "$tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1 || \
+            gh release create "$tag" --repo "$GITHUB_REPOSITORY" --title "$tag" --notes "personal use"
+          gh release upload "$tag" dist/*.zip --repo "$GITHUB_REPOSITORY" --clobber
